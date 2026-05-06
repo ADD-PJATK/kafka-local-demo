@@ -107,6 +107,28 @@ def _compute(window: Deque[Event], now: float, window_s: float) -> dict:
     return out
 
 
+def _fmt(v: Optional[float], *, digits: int = 2) -> str:
+    if v is None:
+        return "—"
+    return f"{v:.{digits}f}"
+
+
+def _format_report(stats: dict) -> str:
+    # Build a compact multi-line report that is easy to read on a projector.
+    sources_items = list(stats.get("sources", {}).items())
+    top_sources = sources_items[:8]
+    sources_line = ", ".join(f"{k}:{v}" for k, v in top_sources) if top_sources else "—"
+
+    lines = [
+        "[rt] Real-time window report",
+        f"  - window: {stats.get('window_events', 0)} events / {stats.get('window_seconds', 0)}s  (eps={_fmt(stats.get('events_per_sec'))})",
+        f"  - value:  avg={_fmt(stats.get('value_avg'))}  min={_fmt(stats.get('value_min'))}  max={_fmt(stats.get('value_max'))}",
+        f"  - lateness (received - event_time): avg={_fmt(stats.get('lateness_avg_s'))}s  p95={_fmt(stats.get('lateness_p95_s'))}s",
+        f"  - sources: {sources_line}",
+    ]
+    return "\n".join(lines)
+
+
 def run_analytics(
     *,
     topic: str,
@@ -144,18 +166,7 @@ def run_analytics(
 
             if now - last_print >= print_every_s:
                 stats = _compute(window, now=now, window_s=window_s)
-                # Single-line output: easy to read during a live demo.
-                sources_short = ", ".join(f"{k}:{v}" for k, v in list(stats["sources"].items())[:6])
-                print(
-                    f"[rt] window={stats['window_events']} "
-                    f"eps={stats['events_per_sec']:.2f} "
-                    f"avg={_fmt(stats['value_avg'])} "
-                    f"min={_fmt(stats['value_min'])} "
-                    f"max={_fmt(stats['value_max'])} "
-                    f"late_avg_s={_fmt(stats['lateness_avg_s'])} "
-                    f"sources=({sources_short})",
-                    flush=True,
-                )
+                print(_format_report(stats), flush=True)
                 last_print = now
 
         return 0
@@ -175,18 +186,12 @@ def run_analytics(
                 pass
 
 
-def _fmt(v: Optional[float]) -> str:
-    if v is None:
-        return "—"
-    return f"{v:.2f}"
-
-
 def main() -> None:
     p = argparse.ArgumentParser(description="Simple real-time analytics over a Kafka topic (sliding window).")
     p.add_argument("--topic", default="demo-events")
     p.add_argument("--group", default="analytics-group")
     p.add_argument("--window-seconds", type=float, default=30.0)
-    p.add_argument("--print-every", type=float, default=2.0)
+    p.add_argument("--print-every", type=float, default=5.0, help="How often to print the report (seconds).")
     p.add_argument("--from-beginning", action="store_true")
     p.add_argument(
         "--compose-file",
