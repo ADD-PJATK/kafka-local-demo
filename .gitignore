@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+.idea/
+.DS_Store
+
+# generated
+presentation-tutorial.html
+
