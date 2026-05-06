@@ -54,15 +54,35 @@ What to show:
 In another terminal, run the analytics loop (Ctrl+C to stop):
 
 ```bash
-python3 streaming-analytics/realtime_analytics.py --topic demo-events --group analytics-group --window-seconds 30 --print-every 2
+python3 streaming-analytics/realtime_analytics.py --topic demo-events --group analytics-group --window-seconds 30
 ```
 
-What to show:
+How to read the report (line by line):
 
-- throughput (events/sec)
-- windowed average/min/max of `value`
-- per-`source` counts (distribution drift)
-- basic “lateness” signal (event_time vs now)
+- `window: <count> events / <window_seconds>s (eps=<x.xx>)`
+  - **what it is**: number of events currently inside the sliding time window
+  - **eps**: events per second in the window:
+    \[
+    eps = \frac{window\_events}{window\_seconds}
+    \]
+  - **why it matters**: simplest throughput/load metric
+
+- `value: avg=<...> min=<...> max=<...>`
+  - **what it is**: statistics of numeric field `value` inside the window
+  - **how to interpret**:
+    - rising `avg` / `max` can indicate spikes (or a real distribution shift)
+    - `min/max` show range and outliers
+
+- `lateness (received - event_time): avg=<...>s p95=<...>s`
+  - **what it is**: “lateness” in seconds:
+    \[
+    lateness = received\_time - event\_time
+    \]
+  - **why it matters**: when it grows, events arrive “old” (network delay, queues, backpressure)
+
+- `sources: web:<..>, mobile:<..>, iot:<..> ...`
+  - **what it is**: per-`source` counts in the window (real-time distribution)
+  - **why it matters**: quick way to notice drift (e.g., suddenly 90% `web`)
 
 ## Notes (teaching points)
 
