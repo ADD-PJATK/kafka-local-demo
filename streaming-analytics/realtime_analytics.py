@@ -191,7 +191,7 @@ def main() -> None:
     p.add_argument("--topic", default="demo-events")
     p.add_argument("--group", default="analytics-group")
     p.add_argument("--window-seconds", type=float, default=30.0)
-    p.add_argument("--print-every", type=float, default=20.0, help="How often to print the report (seconds).")
+    p.add_argument("--print-every", type=float, default=10.0, help="How often to print the report (seconds).")
     p.add_argument("--from-beginning", action="store_true")
     p.add_argument(
         "--compose-file",

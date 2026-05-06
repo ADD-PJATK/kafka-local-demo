@@ -61,7 +61,7 @@ How to read the report (line by line):
 
 ### What the real-time report shows exactly
 
-The analytics output is a **sliding-window summary**. Every ~20 seconds (default), it prints metrics computed from **the last `--window-seconds` seconds** of events that the analytics consumer has received.
+The analytics output is a **sliding-window summary**. Every ~10 seconds (default), it prints metrics computed from **the last `--window-seconds` seconds** of events that the analytics consumer has received.
 
 #### `window: <count> events / <window_seconds>s (eps=<x.xx>)`
 
