@@ -23,6 +23,11 @@ Create the topic:
 python3 basic/topic.py create demo-events
 ```
 
+Note:
+
+- Run commands **from the repo root** as written above.
+- If you `cd streaming-analytics/`, run scripts without the prefix, e.g. `python3 generator.py ...`.
+
 ## 1) Continuous data generation (the stream)
 
 Run the generator (Ctrl+C to stop):

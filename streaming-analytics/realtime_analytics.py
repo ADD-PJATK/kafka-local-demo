@@ -7,10 +7,15 @@ import subprocess
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Deque, Dict, Optional, Tuple
+from pathlib import Path
+from typing import Deque, Dict, Optional
 
 
-def _consumer_argv(topic: str, group: str, from_beginning: bool) -> list[str]:
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _consumer_argv(compose_file: Path, topic: str, group: str, from_beginning: bool) -> list[str]:
     cmd = [
         "kafka-console-consumer",
         "--bootstrap-server",
@@ -23,7 +28,7 @@ def _consumer_argv(topic: str, group: str, from_beginning: bool) -> list[str]:
     if from_beginning:
         cmd.append("--from-beginning")
     bash_cmd = " ".join(cmd)
-    return ["docker", "compose", "exec", "-T", "kafka", "bash", "-lc", bash_cmd]
+    return ["docker", "compose", "-f", str(compose_file), "exec", "-T", "kafka", "bash", "-lc", bash_cmd]
 
 
 def _parse_iso(ts: str) -> Optional[float]:
@@ -110,13 +115,14 @@ def run_analytics(
     print_every_s: float,
     from_beginning: bool,
     show_code: bool,
+    compose_file: Path,
 ) -> int:
-    argv = _consumer_argv(topic=topic, group=group, from_beginning=from_beginning)
+    argv = _consumer_argv(compose_file=compose_file, topic=topic, group=group, from_beginning=from_beginning)
     if show_code:
         print("[code] consumer command:")
         print("  " + " ".join(argv))
 
-    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    proc = subprocess.Popen(argv, cwd=str(_repo_root()), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     assert proc.stdout is not None
 
     window: Deque[Event] = collections.deque()
@@ -182,6 +188,11 @@ def main() -> None:
     p.add_argument("--window-seconds", type=float, default=30.0)
     p.add_argument("--print-every", type=float, default=2.0)
     p.add_argument("--from-beginning", action="store_true")
+    p.add_argument(
+        "--compose-file",
+        default="basic/docker-compose.yml",
+        help="Path to docker-compose.yml (relative to repo root is recommended).",
+    )
     p.add_argument("--no-show-code", action="store_true")
     args = p.parse_args()
 
@@ -192,6 +203,7 @@ def main() -> None:
         print_every_s=args.print_every,
         from_beginning=args.from_beginning,
         show_code=not args.no_show_code,
+        compose_file=(_repo_root() / args.compose_file).resolve(),
     )
     raise SystemExit(code)
 

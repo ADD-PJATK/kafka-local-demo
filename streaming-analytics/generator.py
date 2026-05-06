@@ -14,9 +14,14 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
 
-def _producer_argv(topic: str) -> list[str]:
+def _repo_root() -> Path:
+    # <repo>/streaming-analytics/generator.py
+    return Path(__file__).resolve().parents[1]
+
+
+def _producer_argv(compose_file: Path, topic: str) -> list[str]:
     bash_cmd = f'kafka-console-producer --bootstrap-server kafka:29092 --topic "{topic}" >/dev/null'
-    return ["docker", "compose", "exec", "-T", "kafka", "bash", "-lc", bash_cmd]
+    return ["docker", "compose", "-f", str(compose_file), "exec", "-T", "kafka", "bash", "-lc", bash_cmd]
 
 
 def make_event(seq: int, sources: List[str]) -> dict:
@@ -34,8 +39,8 @@ def make_event(seq: int, sources: List[str]) -> dict:
     }
 
 
-def run_forever(topic: str, sleep_s: float, sources: List[str], show_code: bool) -> int:
-    argv = _producer_argv(topic)
+def run_forever(topic: str, sleep_s: float, sources: List[str], show_code: bool, compose_file: Path) -> int:
+    argv = _producer_argv(compose_file, topic)
     if show_code:
         print("[code] producer command:")
         print("  " + " ".join(argv))
@@ -46,7 +51,7 @@ def run_forever(topic: str, sleep_s: float, sources: List[str], show_code: bool)
             seq += 1
             event = make_event(seq, sources=sources)
             payload = json.dumps(event, ensure_ascii=False)
-            subprocess.run(argv, cwd=str(Path(__file__).resolve().parents[1]), check=True, text=True, input=payload + "\n")
+            subprocess.run(argv, cwd=str(_repo_root()), check=True, text=True, input=payload + "\n")
             print(f"[gen] {payload}", flush=True)
             time.sleep(sleep_s)
     except KeyboardInterrupt:
@@ -58,6 +63,11 @@ def main() -> None:
     p.add_argument("--topic", default="demo-events")
     p.add_argument("--sleep", type=float, default=0.1, help="Delay between events (seconds)")
     p.add_argument(
+        "--compose-file",
+        default="basic/docker-compose.yml",
+        help="Path to docker-compose.yml (relative to repo root is recommended).",
+    )
+    p.add_argument(
         "--sources",
         default="demo,web,mobile,iot",
         help="Comma-separated list of source values to cycle (distribution is random).",
@@ -66,7 +76,14 @@ def main() -> None:
     args = p.parse_args()
 
     sources = [s.strip() for s in args.sources.split(",") if s.strip()]
-    code = run_forever(topic=args.topic, sleep_s=args.sleep, sources=sources, show_code=not args.no_show_code)
+    compose_file = (_repo_root() / args.compose_file).resolve()
+    code = run_forever(
+        topic=args.topic,
+        sleep_s=args.sleep,
+        sources=sources,
+        show_code=not args.no_show_code,
+        compose_file=compose_file,
+    )
     raise SystemExit(code)
 
 

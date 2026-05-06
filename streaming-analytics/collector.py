@@ -3,12 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import sys
 from pathlib import Path
-from typing import Optional
 
 
-def _consumer_argv(topic: str, group: str, from_beginning: bool) -> list[str]:
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _consumer_argv(compose_file: Path, topic: str, group: str, from_beginning: bool) -> list[str]:
     cmd = [
         "kafka-console-consumer",
         "--bootstrap-server",
@@ -21,20 +23,20 @@ def _consumer_argv(topic: str, group: str, from_beginning: bool) -> list[str]:
     if from_beginning:
         cmd.append("--from-beginning")
     bash_cmd = " ".join(cmd)
-    return ["docker", "compose", "exec", "-T", "kafka", "bash", "-lc", bash_cmd]
+    return ["docker", "compose", "-f", str(compose_file), "exec", "-T", "kafka", "bash", "-lc", bash_cmd]
 
 
-def collect(topic: str, group: str, out_path: Path, from_beginning: bool, show_code: bool) -> int:
+def collect(topic: str, group: str, out_path: Path, from_beginning: bool, show_code: bool, compose_file: Path) -> int:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    argv = _consumer_argv(topic=topic, group=group, from_beginning=from_beginning)
+    argv = _consumer_argv(compose_file=compose_file, topic=topic, group=group, from_beginning=from_beginning)
     if show_code:
         print("[code] consumer command:")
         print("  " + " ".join(argv))
 
     # Stream raw values (one message per line) and append to NDJSON.
     # We also validate that each line is JSON and rewrite it as compact JSON.
-    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    proc = subprocess.Popen(argv, cwd=str(_repo_root()), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     assert proc.stdout is not None
 
     with out_path.open("a", encoding="utf-8") as f:
@@ -76,6 +78,11 @@ def main() -> None:
     p.add_argument("--group", default="collector-group")
     p.add_argument("--out", default="data/raw_events.ndjson")
     p.add_argument("--from-beginning", action="store_true")
+    p.add_argument(
+        "--compose-file",
+        default="basic/docker-compose.yml",
+        help="Path to docker-compose.yml (relative to repo root is recommended).",
+    )
     p.add_argument("--no-show-code", action="store_true")
     args = p.parse_args()
 
@@ -85,6 +92,7 @@ def main() -> None:
         out_path=Path(args.out),
         from_beginning=args.from_beginning,
         show_code=not args.no_show_code,
+        compose_file=(_repo_root() / args.compose_file).resolve(),
     )
     raise SystemExit(code)
 
