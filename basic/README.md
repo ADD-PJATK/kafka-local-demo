@@ -1,12 +1,3 @@
-# Kafka local demo — tutorial sets
-
-This repository contains two tutorial sets:
-
-- **`basic/`** — local Kafka + Kafka UI + CLI walkthrough (producer/consumer/topics/consumer-groups)
-- **`streaming-analytics/`** — tutorial showing how to **collect** streaming data and do **real-time analysis** in a simple way
-
-If you just want to run the demo, start with `basic/README.md`.
-
 # Kafka Local Demo (Docker Compose) — cross-platform Python CLI
 
 This repository contains a **local Kafka + Kafka UI demo environment** designed for classroom use and self-study.
