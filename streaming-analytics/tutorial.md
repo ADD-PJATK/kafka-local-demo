@@ -5,55 +5,51 @@ Goal: show a realistic workflow for **streaming data**:
 - **ingest/collect** events into a raw dataset (append-only, NDJSON)
 - run **real-time analytics** (windowed metrics, per-source counts, basic anomaly signals)
 
-## Prerequisites
-
-Run the basic environment first (from `../basic/`):
-
-```bash
-python3 setup.py --check-ports
-```
-
-```bash
-python3 up.py --reset
-```
-
-Create the topic (if needed):
-
-```bash
-python3 topic.py create demo-events
-```
-
-## Part A — Collect (raw event log)
+## 0) Setup (from scratch)
 
 From repo root:
+
+```bash
+python3 basic/setup.py --check-ports
+```
+
+```bash
+python3 basic/up.py --reset
+```
+
+Create the topic:
+
+```bash
+python3 basic/topic.py create demo-events
+```
+
+## 1) Continuous data generation (the stream)
+
+Run the generator (Ctrl+C to stop):
+
+```bash
+python3 streaming-analytics/generator.py --topic demo-events --sleep 0.05
+```
+
+## 2) Collect (raw event log)
+
+In another terminal, start the collector (Ctrl+C to stop):
 
 ```bash
 python3 streaming-analytics/collector.py --topic demo-events --group collector-group --out data/raw_events.ndjson
 ```
 
-Now produce events (in another terminal, from `basic/`):
-
-```bash
-python3 produce.py demo-events --count 50 --sleep 0.1
-```
-
 What to show:
 
-- you can stop and restart the collector and it will continue appending
+- you can stop and restart the collector and it will continue appending (offsets are tracked by the group)
 - the output file is an **append-only raw log** (good for replay/debugging)
 
-## Part B — Real-time analytics (sliding window)
+## 3) Real-time analytics (sliding window)
 
-Run the analytics loop:
+In another terminal, run the analytics loop (Ctrl+C to stop):
 
 ```bash
 python3 streaming-analytics/realtime_analytics.py --topic demo-events --group analytics-group --window-seconds 30 --print-every 2
-```
-
-Now produce more events:
-
-```bash
-python3 produce.py demo-events --count 200 --sleep 0.05
 ```
 
 What to show:
