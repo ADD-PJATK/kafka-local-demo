@@ -33,7 +33,7 @@ Note:
 Run the generator (Ctrl+C to stop):
 
 ```bash
-python3 streaming-analytics/generator.py --topic demo-events --sleep 0.05
+python3 streaming-analytics/generator.py --topic demo-events --sleep 0.05 --ensure-topic
 ```
 
 ## 2) Collect (raw event log)

@@ -23,6 +23,24 @@ def _producer_argv(compose_file: Path, topic: str) -> list[str]:
     bash_cmd = f'kafka-console-producer --bootstrap-server kafka:29092 --topic "{topic}" >/dev/null'
     return ["docker", "compose", "-f", str(compose_file), "exec", "-T", "kafka", "bash", "-lc", bash_cmd]
 
+def _topic_exists(compose_file: Path, topic: str) -> bool:
+    bash_cmd = f'kafka-topics --bootstrap-server kafka:29092 --describe --topic "{topic}" >/dev/null 2>&1'
+    argv = ["docker", "compose", "-f", str(compose_file), "exec", "-T", "kafka", "bash", "-lc", bash_cmd]
+    cp = subprocess.run(argv, cwd=str(_repo_root()), text=True)
+    return cp.returncode == 0
+
+
+def _ensure_topic(compose_file: Path, topic: str, partitions: int, replication: int, show_code: bool) -> None:
+    bash_cmd = (
+        f'kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic "{topic}" '
+        f'--partitions "{partitions}" --replication-factor "{replication}"'
+    )
+    argv = ["docker", "compose", "-f", str(compose_file), "exec", "-T", "kafka", "bash", "-lc", bash_cmd]
+    if show_code:
+        print("[code] ensure topic:")
+        print("  " + " ".join(argv))
+    subprocess.run(argv, cwd=str(_repo_root()), check=True, text=True)
+
 
 def make_event(seq: int, sources: List[str]) -> dict:
     # Add a bit of randomness so analytics show changing distribution.
@@ -39,7 +57,27 @@ def make_event(seq: int, sources: List[str]) -> dict:
     }
 
 
-def run_forever(topic: str, sleep_s: float, sources: List[str], show_code: bool, compose_file: Path) -> int:
+def run_forever(
+    topic: str,
+    sleep_s: float,
+    sources: List[str],
+    show_code: bool,
+    compose_file: Path,
+    ensure_topic: bool,
+    partitions: int,
+    replication: int,
+) -> int:
+    if ensure_topic:
+        _ensure_topic(compose_file, topic, partitions=partitions, replication=replication, show_code=show_code)
+    else:
+        # Avoid confusing producer spam in class: fail fast with a clear message.
+        if not _topic_exists(compose_file, topic):
+            raise SystemExit(
+                f"Topic '{topic}' does not exist. Create it first, e.g.:\n"
+                f"  python3 basic/topic.py create {topic}\n"
+                f"Or run this generator with --ensure-topic."
+            )
+
     argv = _producer_argv(compose_file, topic)
     if show_code:
         print("[code] producer command:")
@@ -68,6 +106,13 @@ def main() -> None:
         help="Path to docker-compose.yml (relative to repo root is recommended).",
     )
     p.add_argument(
+        "--ensure-topic",
+        action="store_true",
+        help="Create the topic if missing (auto-create is disabled in this demo).",
+    )
+    p.add_argument("--partitions", type=int, default=3, help="Partitions for --ensure-topic")
+    p.add_argument("--replication", type=int, default=1, help="Replication factor for --ensure-topic")
+    p.add_argument(
         "--sources",
         default="demo,web,mobile,iot",
         help="Comma-separated list of source values to cycle (distribution is random).",
@@ -83,6 +128,9 @@ def main() -> None:
         sources=sources,
         show_code=not args.no_show_code,
         compose_file=compose_file,
+        ensure_topic=args.ensure_topic,
+        partitions=args.partitions,
+        replication=args.replication,
     )
     raise SystemExit(code)
 
