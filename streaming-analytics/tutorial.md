@@ -59,30 +59,46 @@ python3 streaming-analytics/realtime_analytics.py --topic demo-events --group an
 
 How to read the report (line by line):
 
-- `window: <count> events / <window_seconds>s (eps=<x.xx>)`
-  - **what it is**: number of events currently inside the sliding time window
-  - **eps**: events per second in the window:
-    \[
-    eps = \frac{window\_events}{window\_seconds}
-    \]
-  - **why it matters**: simplest throughput/load metric
+### What the real-time report shows exactly
 
-- `value: avg=<...> min=<...> max=<...>`
-  - **what it is**: statistics of numeric field `value` inside the window
-  - **how to interpret**:
-    - rising `avg` / `max` can indicate spikes (or a real distribution shift)
-    - `min/max` show range and outliers
+The analytics output is a **sliding-window summary**. Every ~20 seconds (default), it prints metrics computed from **the last `--window-seconds` seconds** of events that the analytics consumer has received.
 
-- `lateness (received - event_time): avg=<...>s p95=<...>s`
-  - **what it is**: “lateness” in seconds:
-    \[
-    lateness = received\_time - event\_time
-    \]
-  - **why it matters**: when it grows, events arrive “old” (network delay, queues, backpressure)
+#### `window: <count> events / <window_seconds>s (eps=<x.xx>)`
 
-- `sources: web:<..>, mobile:<..>, iot:<..> ...`
-  - **what it is**: per-`source` counts in the window (real-time distribution)
-  - **why it matters**: quick way to notice drift (e.g., suddenly 90% `web`)
+- **What it shows**: how many events are currently “in memory” inside the active time window (for example: last 30 seconds).
+- **`eps` (events per second)** is computed as:
+
+\[
+eps = \frac{window\_events}{window\_seconds}
+\]
+
+- **Why it matters**: `eps` is the simplest throughput/load indicator. If it drops, ingestion slowed down; if it spikes, your pipeline is under higher load.
+
+#### `value: avg=<...> min=<...> max=<...>`
+
+- **What it shows**: windowed statistics of the numeric field `value` (only events where `value` is parseable as a number).
+- **How to interpret**:
+  - rising **`avg`** and/or **`max`** may indicate a spike/outlier burst (or a real distribution shift in the data source)
+  - `min/max` shows the range; large `max` with stable `avg` often means rare outliers
+
+#### `sources: web:<..>, mobile:<..>, iot:<..> ...`
+
+- **What it shows**: per-`source` counts in the window (a “real-time distribution” snapshot).
+- **Why it matters**: it lets you spot distribution drift quickly (e.g. suddenly 90% of traffic is `web`).
+- **In real pipelines**: these counters often feed alerting and drift detection.
+
+#### `lateness (received - event_time): avg=<...>s p95=<...>s`
+
+- **What it shows**: event “lateness” (in seconds) inside the window:
+
+\[
+lateness = received\_time - event\_time
+\]
+
+- **Why it matters**: if lateness grows, events are arriving “old” (network delays, queues, backpressure, slow producers).
+- **Important concept**:
+  - **event time**: when the event actually happened (inside the payload)
+  - **processing/ingest time**: when your system observed/processed it
 
 ## Notes (teaching points)
 
