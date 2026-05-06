@@ -4,6 +4,7 @@ import argparse
 import collections
 import json
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -148,9 +149,22 @@ def run_analytics(
     assert proc.stdout is not None
 
     window: Deque[Event] = collections.deque()
-    last_print = time.time()
+    lock = threading.Lock()
+    stop = threading.Event()
+
+    def ticker() -> None:
+        # Print periodically even if no new events arrive, so it doesn't look "hung".
+        while not stop.is_set():
+            time.sleep(print_every_s)
+            now = time.time()
+            with lock:
+                stats = _compute(window, now=now, window_s=window_s)
+            print(_format_report(stats), flush=True)
 
     try:
+        t = threading.Thread(target=ticker, daemon=True)
+        t.start()
+
         for line in proc.stdout:
             line = line.strip()
             if not line:
@@ -162,17 +176,14 @@ def run_analytics(
             except json.JSONDecodeError:
                 continue
 
-            window.append(_as_event(obj, received_ts=now))
-
-            if now - last_print >= print_every_s:
-                stats = _compute(window, now=now, window_s=window_s)
-                print(_format_report(stats), flush=True)
-                last_print = now
+            with lock:
+                window.append(_as_event(obj, received_ts=now))
 
         return 0
     except KeyboardInterrupt:
         return 0
     finally:
+        stop.set()
         try:
             proc.terminate()
         except Exception:

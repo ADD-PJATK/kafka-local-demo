@@ -57,6 +57,11 @@ In another terminal, run the analytics loop (Ctrl+C to stop):
 python3 streaming-analytics/realtime_analytics.py --topic demo-events --group analytics-group --window-seconds 30
 ```
 
+If nothing prints:
+
+- make sure the generator is running (events must exist)
+- change the group id (a group that already consumed everything may sit at the end and wait for new events)
+
 How to read the report (line by line):
 
 ### What the real-time report shows exactly
