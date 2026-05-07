@@ -132,25 +132,56 @@ def consume(
 
 def main() -> None:
     root_dir = repo_root_from_this_file(__file__)
-    p = argparse.ArgumentParser(description="Consume events from a Kafka topic (consumer group).")
+    p = argparse.ArgumentParser(
+        description="Consume events from a Kafka topic (consumer group).",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=(
+            "What this script runs under the hood\n"
+            "-------------------------------\n"
+            "It starts Kafka CLI inside the container via:\n"
+            "  docker compose exec -T kafka bash -lc \"kafka-console-consumer ...\"\n"
+            "\n"
+            "Kafka CLI used here: kafka-console-consumer\n"
+            "  --bootstrap-server kafka:29092   address of the broker as seen *from the container*\n"
+            "  --topic <name>                  topic to read from\n"
+            "  --group <id>                    consumer group id (controls committed offsets)\n"
+            "  --from-beginning                start from earliest offsets (only for a group with no commits)\n"
+            "  --consumer-property client.id=...   sets Kafka client.id (helps distinguish instances)\n"
+            "  --property print.*=true         prints metadata (partition/offset/timestamp)\n"
+        ),
+    )
     add_common_flags(p)
-    p.add_argument("topic", nargs="?", default=DEFAULT_TOPIC)
-    p.add_argument("--group", default=DEFAULT_GROUP, help="Consumer group id (controls offsets/replay).")
+    p.add_argument("topic", nargs="?", default=DEFAULT_TOPIC, help='Maps to: --topic "<topic>"')
+    p.add_argument(
+        "--group",
+        default=DEFAULT_GROUP,
+        help='Maps to: --group "<id>" (consumer group id; controls offsets/replay)',
+    )
     p.add_argument(
         "--instances",
         type=int,
         default=1,
-        help="Start N consumers in the same group (shows real consumer group partition assignment).",
+        help=(
+            "Start N consumers in the same group.\n"
+            "Under the hood it runs the same kafka-console-consumer command N times with different:\n"
+            "  --consumer-property client.id=demo-consumer-<i>"
+        ),
     )
     p.add_argument(
         "--print-meta",
         action="store_true",
-        help="Print partition/offset/timestamp (recommended for group demo).",
+        help=(
+            "Add metadata printing to each message.\n"
+            "Maps to:\n"
+            "  --property print.partition=true\n"
+            "  --property print.offset=true\n"
+            "  --property print.timestamp=true"
+        ),
     )
     p.add_argument(
         "--from-beginning",
         action="store_true",
-        help="Read from earliest offsets (only effective for a new group without committed offsets).",
+        help='Maps to: --from-beginning (only effective for a new group without committed offsets)',
     )
     args = p.parse_args()
 

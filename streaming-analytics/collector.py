@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import subprocess
 from pathlib import Path
@@ -39,16 +40,29 @@ def collect(topic: str, group: str, out_path: Path, from_beginning: bool, show_c
     proc = subprocess.Popen(argv, cwd=str(_repo_root()), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     assert proc.stdout is not None
 
+    def parse_obj(line: str) -> dict | None:
+        try:
+            obj = json.loads(line)
+            return obj if isinstance(obj, dict) else None
+        except json.JSONDecodeError:
+            pass
+        if line.lstrip().startswith("{") and ("'" in line):
+            try:
+                obj = ast.literal_eval(line)
+                return obj if isinstance(obj, dict) else None
+            except Exception:
+                return None
+        return None
+
     with out_path.open("a", encoding="utf-8") as f:
         try:
             for line in proc.stdout:
                 line = line.strip()
                 if not line:
                     continue
-                try:
-                    obj = json.loads(line)
-                except json.JSONDecodeError:
-                    # Keep non-JSON lines as-is (rare, but helps debugging).
+                obj = parse_obj(line)
+                if obj is None:
+                    # Keep non-event lines as-is (rare, but helps debugging).
                     f.write(json.dumps({"raw": line}, ensure_ascii=False) + "\n")
                     f.flush()
                     continue
@@ -73,17 +87,32 @@ def collect(topic: str, group: str, out_path: Path, from_beginning: bool, show_c
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Collect Kafka events into an append-only NDJSON file.")
-    p.add_argument("--topic", default="demo-events")
-    p.add_argument("--group", default="collector-group")
-    p.add_argument("--out", default="data/raw_events.ndjson")
-    p.add_argument("--from-beginning", action="store_true")
+    p = argparse.ArgumentParser(
+        description="Collect Kafka events into an append-only NDJSON file.",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=(
+            "What this script runs under the hood\n"
+            "-------------------------------\n"
+            "It executes Kafka CLI in the Kafka container via docker compose:\n"
+            "  docker compose -f <compose-file> exec -T kafka bash -lc \"kafka-console-consumer ...\"\n"
+            "\n"
+            "Kafka CLI used here: kafka-console-consumer\n"
+            "  --bootstrap-server kafka:29092   address of the broker as seen *from the container*\n"
+            "  --topic <name>                  topic to read from\n"
+            "  --group <id>                    consumer group id (controls committed offsets)\n"
+            "  --from-beginning                start from earliest offsets (only for a group with no commits)\n"
+        ),
+    )
+    p.add_argument("--topic", default="demo-events", help='Maps to: kafka-console-consumer --topic "<topic>"')
+    p.add_argument("--group", default="collector-group", help='Maps to: kafka-console-consumer --group "<id>"')
+    p.add_argument("--out", default="data/raw_events.ndjson", help="Where to append NDJSON output on the host machine.")
+    p.add_argument("--from-beginning", action="store_true", help="Maps to: kafka-console-consumer --from-beginning")
     p.add_argument(
         "--compose-file",
         default="basic/docker-compose.yml",
-        help="Path to docker-compose.yml (relative to repo root is recommended).",
+        help="Which compose file to pass to: docker compose -f <compose-file> ...",
     )
-    p.add_argument("--no-show-code", action="store_true")
+    p.add_argument("--no-show-code", action="store_true", help="Do not print the underlying docker/kafka command.")
     args = p.parse_args()
 
     code = collect(

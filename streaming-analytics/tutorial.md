@@ -49,6 +49,20 @@ What to show:
 - you can stop and restart the collector and it will continue appending (offsets are tracked by the group)
 - the output file is an **append-only raw log** (good for replay/debugging)
 
+## 2b) Validate collected data (sanity checks)
+
+After a few seconds of collection, validate the downloaded/collected dataset:
+
+```bash
+python3 streaming-analytics/validate_raw_events.py --in data/raw_events.ndjson
+```
+
+Optionally write a clean file that contains only valid events:
+
+```bash
+python3 streaming-analytics/validate_raw_events.py --in data/raw_events.ndjson --write-clean data/raw_events_clean.ndjson
+```
+
 ## 3) Real-time analytics (sliding window)
 
 In another terminal, run the analytics loop (Ctrl+C to stop):
@@ -67,6 +81,9 @@ How to read the report (line by line):
 ### What the real-time report shows exactly
 
 The analytics output is a **sliding-window summary**. Every ~10 seconds (default), it prints metrics computed from **the last `--window-seconds` seconds** of events that the analytics consumer has received.
+
+For a detailed, projector-friendly explanation (with interpretations + troubleshooting), see:
+- `streaming-analytics/realtime-analytics-report.md`
 
 #### `window: <count> events / <window_seconds>s (eps=<x.xx>)`
 

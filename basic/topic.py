@@ -85,24 +85,96 @@ def topic_delete(ctx: Ctx, topic: str) -> None:
 
 def main() -> None:
     root_dir = repo_root_from_this_file(__file__)
-    p = argparse.ArgumentParser(description="Kafka topic helper (Docker Compose exec).")
+    p = argparse.ArgumentParser(
+        description="Kafka topic helper (runs Kafka CLI inside Docker Compose).",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=(
+            "What this script runs under the hood\n"
+            "-------------------------------\n"
+            "All commands are executed in the Kafka container via:\n"
+            "  docker compose exec -T kafka bash -lc \"<KAFKA_COMMAND>\"\n"
+            "\n"
+            "Kafka CLI used here: kafka-topics\n"
+            "  --bootstrap-server kafka:29092   address of the broker as seen *from the container*\n"
+            "  --topic <name>                  topic name (e.g. demo-events)\n"
+            "  --create / --list / --describe / --delete   which operation to perform\n"
+            "  --if-not-exists                 do not fail if the topic already exists (create)\n"
+            "  --partitions <n>                number of partitions (create)\n"
+            "  --replication-factor <n>        replication factor (create)\n"
+        ),
+    )
     add_common_flags(p)
 
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    p_create = sub.add_parser("create", help="Create a topic")
-    p_create.add_argument("topic", nargs="?", default=DEFAULT_TOPIC)
-    p_create.add_argument("--partitions", type=int, default=3)
-    p_create.add_argument("--replication", type=int, default=1)
+    p_create = sub.add_parser(
+        "create",
+        help="Create a topic",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=(
+            "Underlying Kafka command:\n"
+            "  kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \\\n"
+            "    --topic <topic> --partitions <partitions> --replication-factor <replication>\n"
+        ),
+    )
+    p_create.add_argument(
+        "topic",
+        nargs="?",
+        default=DEFAULT_TOPIC,
+        help='Maps to: kafka-topics --topic "<topic>"',
+    )
+    p_create.add_argument(
+        "--partitions",
+        type=int,
+        default=3,
+        help='Maps to: kafka-topics --partitions "<n>"',
+    )
+    p_create.add_argument(
+        "--replication",
+        type=int,
+        default=1,
+        help='Maps to: kafka-topics --replication-factor "<n>"',
+    )
 
-    sub.add_parser("list", help="List topics")
+    sub.add_parser(
+        "list",
+        help="List topics",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog="Underlying Kafka command:\n  kafka-topics --bootstrap-server kafka:29092 --list\n",
+    )
 
-    p_desc = sub.add_parser("describe", help="Describe a topic")
-    p_desc.add_argument("topic", nargs="?", default=DEFAULT_TOPIC)
+    p_desc = sub.add_parser(
+        "describe",
+        help="Describe a topic",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=(
+            "Underlying Kafka command:\n"
+            "  kafka-topics --bootstrap-server kafka:29092 --describe --topic <topic>\n"
+        ),
+    )
+    p_desc.add_argument(
+        "topic",
+        nargs="?",
+        default=DEFAULT_TOPIC,
+        help='Maps to: kafka-topics --topic "<topic>"',
+    )
     p_desc.add_argument("--raw", action="store_true", help="Print Kafka's original output")
 
-    p_del = sub.add_parser("delete", help="Delete a topic")
-    p_del.add_argument("topic", nargs="?", default=DEFAULT_TOPIC)
+    p_del = sub.add_parser(
+        "delete",
+        help="Delete a topic",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=(
+            "Underlying Kafka command:\n"
+            "  kafka-topics --bootstrap-server kafka:29092 --delete --topic <topic>\n"
+        ),
+    )
+    p_del.add_argument(
+        "topic",
+        nargs="?",
+        default=DEFAULT_TOPIC,
+        help='Maps to: kafka-topics --topic "<topic>"',
+    )
 
     args = p.parse_args()
 

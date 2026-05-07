@@ -97,27 +97,53 @@ def run_forever(
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Continuously generate streaming events into Kafka (Ctrl+C to stop).")
-    p.add_argument("--topic", default="demo-events")
-    p.add_argument("--sleep", type=float, default=0.1, help="Delay between events (seconds)")
+    p = argparse.ArgumentParser(
+        description="Continuously generate streaming events into Kafka (Ctrl+C to stop).",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=(
+            "What this script runs under the hood\n"
+            "-------------------------------\n"
+            "It executes Kafka CLI in the Kafka container via docker compose:\n"
+            "  docker compose -f <compose-file> exec -T kafka bash -lc \"<KAFKA_COMMAND>\"\n"
+            "\n"
+            "Kafka CLI used here: kafka-console-producer\n"
+            "  --bootstrap-server kafka:29092   address of the broker as seen *from the container*\n"
+            "  --topic <name>                  topic to write to\n"
+            "\n"
+            "If --ensure-topic is enabled, it also runs kafka-topics:\n"
+            "  kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \\\n"
+            "    --topic <topic> --partitions <partitions> --replication-factor <replication>\n"
+        ),
+    )
+    p.add_argument("--topic", default="demo-events", help='Maps to: kafka-console-producer --topic "<topic>"')
+    p.add_argument("--sleep", type=float, default=0.1, help="Delay between events (seconds). Only affects pacing, not Kafka.")
     p.add_argument(
         "--compose-file",
         default="basic/docker-compose.yml",
-        help="Path to docker-compose.yml (relative to repo root is recommended).",
+        help="Which compose file to pass to: docker compose -f <compose-file> ...",
     )
     p.add_argument(
         "--ensure-topic",
         action="store_true",
-        help="Create the topic if missing (auto-create is disabled in this demo).",
+        help=(
+            "If the topic is missing, create it first.\n"
+            "Maps to kafka-topics:\n"
+            "  --create --if-not-exists --topic <topic> --partitions <partitions> --replication-factor <replication>"
+        ),
     )
-    p.add_argument("--partitions", type=int, default=3, help="Partitions for --ensure-topic")
-    p.add_argument("--replication", type=int, default=1, help="Replication factor for --ensure-topic")
+    p.add_argument("--partitions", type=int, default=3, help='Used with --ensure-topic; maps to: kafka-topics --partitions "<n>"')
+    p.add_argument(
+        "--replication",
+        type=int,
+        default=1,
+        help='Used with --ensure-topic; maps to: kafka-topics --replication-factor "<n>"',
+    )
     p.add_argument(
         "--sources",
         default="demo,web,mobile,iot",
         help="Comma-separated list of source values to cycle (distribution is random).",
     )
-    p.add_argument("--no-show-code", action="store_true")
+    p.add_argument("--no-show-code", action="store_true", help="Do not print the underlying docker/kafka command.")
     args = p.parse_args()
 
     sources = [s.strip() for s in args.sources.split(",") if s.strip()]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import collections
 import json
 import subprocess
@@ -122,12 +123,34 @@ def _format_report(stats: dict) -> str:
 
     lines = [
         "[rt] Real-time window report",
+        f"  - input: parsed={stats.get('parsed_total', 0)}  skipped_non_json={stats.get('skipped_total', 0)}",
         f"  - window: {stats.get('window_events', 0)} events / {stats.get('window_seconds', 0)}s  (eps={_fmt(stats.get('events_per_sec'))})",
         f"  - value:  avg={_fmt(stats.get('value_avg'))}  min={_fmt(stats.get('value_min'))}  max={_fmt(stats.get('value_max'))}",
         f"  - lateness (received - event_time): avg={_fmt(stats.get('lateness_avg_s'))}s  p95={_fmt(stats.get('lateness_p95_s'))}s",
         f"  - sources: {sources_line}",
     ]
     return "\n".join(lines)
+
+
+def _parse_event_line(line: str) -> Optional[dict]:
+    """
+    Accept:
+    - JSON objects (preferred): {"event_id": "...", ...}
+    - Python dict repr (fallback): {'event_id': '...', ...}
+    """
+    try:
+        obj = json.loads(line)
+        return obj if isinstance(obj, dict) else None
+    except json.JSONDecodeError:
+        pass
+    # Fallback: safe parse of Python literal dicts.
+    if line.lstrip().startswith("{") and ("'" in line):
+        try:
+            obj = ast.literal_eval(line)
+            return obj if isinstance(obj, dict) else None
+        except Exception:
+            return None
+    return None
 
 
 def run_analytics(
@@ -151,6 +174,8 @@ def run_analytics(
     window: Deque[Event] = collections.deque()
     lock = threading.Lock()
     stop = threading.Event()
+    parsed_total = 0
+    skipped_total = 0
 
     def ticker() -> None:
         # Print periodically even if no new events arrive, so it doesn't look "hung".
@@ -159,6 +184,8 @@ def run_analytics(
             now = time.time()
             with lock:
                 stats = _compute(window, now=now, window_s=window_s)
+                stats["parsed_total"] = parsed_total
+                stats["skipped_total"] = skipped_total
             print(_format_report(stats), flush=True)
 
     try:
@@ -171,13 +198,15 @@ def run_analytics(
                 continue
 
             now = time.time()
-            try:
-                obj = json.loads(line)
-            except json.JSONDecodeError:
+            obj = _parse_event_line(line)
+            if obj is None:
+                with lock:
+                    skipped_total += 1
                 continue
 
             with lock:
                 window.append(_as_event(obj, received_ts=now))
+                parsed_total += 1
 
         return 0
     except KeyboardInterrupt:
@@ -198,18 +227,33 @@ def run_analytics(
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Simple real-time analytics over a Kafka topic (sliding window).")
-    p.add_argument("--topic", default="demo-events")
-    p.add_argument("--group", default="analytics-group")
-    p.add_argument("--window-seconds", type=float, default=30.0)
+    p = argparse.ArgumentParser(
+        description="Simple real-time analytics over a Kafka topic (sliding window).",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=(
+            "What this script runs under the hood\n"
+            "-------------------------------\n"
+            "It executes Kafka CLI in the Kafka container via docker compose:\n"
+            "  docker compose -f <compose-file> exec -T kafka bash -lc \"kafka-console-consumer ...\"\n"
+            "\n"
+            "Kafka CLI used here: kafka-console-consumer\n"
+            "  --bootstrap-server kafka:29092   address of the broker as seen *from the container*\n"
+            "  --topic <name>                  topic to read from\n"
+            "  --group <id>                    consumer group id (controls committed offsets)\n"
+            "  --from-beginning                start from earliest offsets (only for a group with no commits)\n"
+        ),
+    )
+    p.add_argument("--topic", default="demo-events", help='Maps to: kafka-console-consumer --topic "<topic>"')
+    p.add_argument("--group", default="analytics-group", help='Maps to: kafka-console-consumer --group "<id>"')
+    p.add_argument("--window-seconds", type=float, default=30.0, help="Size of the sliding window used in calculations (seconds).")
     p.add_argument("--print-every", type=float, default=10.0, help="How often to print the report (seconds).")
-    p.add_argument("--from-beginning", action="store_true")
+    p.add_argument("--from-beginning", action="store_true", help="Maps to: kafka-console-consumer --from-beginning")
     p.add_argument(
         "--compose-file",
         default="basic/docker-compose.yml",
-        help="Path to docker-compose.yml (relative to repo root is recommended).",
+        help="Which compose file to pass to: docker compose -f <compose-file> ...",
     )
-    p.add_argument("--no-show-code", action="store_true")
+    p.add_argument("--no-show-code", action="store_true", help="Do not print the underlying docker/kafka command.")
     args = p.parse_args()
 
     code = run_analytics(
